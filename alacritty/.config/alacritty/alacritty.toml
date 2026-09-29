@@ -1,0 +1,11 @@
+[general]
+import = [ 
+	"~/.config/alacritty/themes/ayu-mirage.toml"
+]
+
+[font]
+normal = { family = "Firacode Nerd Font Mono", style = "Regular" }
+size = 20.0
+
+[window]
+option_as_alt = "OnlyRight"
