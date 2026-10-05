@@ -605,7 +605,7 @@ It's useful if you don't use standard project structures (or there is none).
 
 ** Eglot
 Built in Emacs client for the Language Server Protocol.
-We use Eglot because it is fast and minimal.
+We use Eglot because it is fast and minimal.X
 For more: C-h i: g: (eglot)Top
 
 Eglot does not automatically download LSP servers. It requires a separate download.
@@ -634,12 +634,23 @@ If you want to use LSP mode check out their [[https://emacs-lsp.github.io/lsp-mo
       (eglot-code-action-indications nil) ; Can be annoying.
       (eglot-report-progress nil) ; Disable LSP server logs (Don't show lsp messages at the bottom, java)
       (flymake-show-diagnostics-at-end-of-line 'short) ; IDE like errors in the editor. There is also fancy.
+      (eglot-workspace-configuration '(:python (:pythonPath "/var/tmp/sage-10.9-current/local/bin/python3")
+                                               :basedpyright
+                                               (:analysis
+                                                (:diagnosticMode "openFilesOnly"
+                                                                 :extraPaths ["/Users/gjazeron/Library/SageMath-10-9/lib/python3.14/site-packages"]
+                                                                 :typeCheckingMode "basic"
+                                                                 :useLibraryCodeForTypes :json-false))
+                                               ))
       ;; Manual lsp servers
       ;;:config
       ;;(add-to-list 'eglot-server-programs
       ;;             `(lua-mode . ("PATH_TO_THE_LSP_FOLDER/bin/lua-language-server" "-lsp"))) ; Adds our lua lsp server to eglot's server list
       )
 #+end_src
+
+#+RESULTS:
+| eglot-ensure |
 
 ** Mason.el
 Package manager for LSP, DAP, linters, and more for the Emacs Operating System.
@@ -759,6 +770,12 @@ You can easily write your own font locking with treesitter
 #+end_src
 
 ** Language modes
+*** Python setup
+#+begin_src emacs-lisp
+    (use-package pyvenv
+      :hook (python-base-mode . pyvenv-mode)
+      )
+      #+end_src
 *** LaTeX mode
 Setup auctex + viewing pdf in skim
 #+begin_src emacs-lisp
