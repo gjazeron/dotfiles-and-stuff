@@ -26,6 +26,7 @@
   - [[#editing][Editing]]
   - [[#projectile][Projectile]]
   - [[#eglot][Eglot]]
+  - [[#formatting][Formatting]]
   - [[#masonel][Mason.el]]
   - [[#yasnippet][Yasnippet]]
   - [[#snippy][Snippy]]
@@ -249,7 +250,7 @@ Only works with package.el.
       (inhibit-startup-screen t)  ; Disable welcome screen
 
       (delete-selection-mode t)   ; Select text and delete it by typing.
-      (electric-indent-mode nil)  ; Turn off the weird indenting that Emacs does by default.
+      (electric-indent-mode t)    ; Turns on indentation when pressing return
       (electric-pair-mode t)      ; Turns on automatic parens pairing
 
       (blink-cursor-mode nil)     ; Don't blink cursor
@@ -289,7 +290,7 @@ Only works with package.el.
       (whitespace-style '(face tabs tab-mark trailing))
 
       (make-backup-files nil) ; Stop creating ~ backup files
-      (auto-save-default nil) ; Stop creating # auto save files
+      (auto-save-default t) ; Create auto-saves
       (delete-by-moving-to-trash t)
       ;; Disable left alt key on Mac
       (ns-option-modifier nil)
@@ -604,58 +605,59 @@ It's useful if you don't use standard project structures (or there is none).
 #+end_src
 
 ** Eglot
-Built in Emacs client for the Language Server Protocol.
-We use Eglot because it is fast and minimal.X
-For more: C-h i: g: (eglot)Top
-
-Eglot does not automatically download LSP servers. It requires a separate download.
-The easiest way to install LSP servers is with a package manager like mason.el.
-
-If you can't use a package manager you can do the following:
-- Download the server (e.g. from github)
-- Add the binary/executable to your path.
-- Or customize the eglot-server-programs list.
-To control how an LSP server is started customize the eglot-server-programs list.
-
-There are many alternative LSP clients, one of them is LSP-mode.
-Which has more features and supports automatic language server installation.
-But it's bigger, so it has more moving parts.
-
-We don't use it because Eglot is more than enough for most people.
-If you want to use LSP mode check out their [[https://emacs-lsp.github.io/lsp-mode/][documentation]] or the [[https://github.com/MiniApollo/kickstart.emacs/wiki][project wiki]] page for more information.
 #+begin_src emacs-lisp
     (use-package eglot
       :ensure nil ; Don't install eglot because it's now built-in
-      :hook ((c-mode c++-mode python-base-mode lua-mode latex-mode)
-             . eglot-ensure)
+      :init
+      ;; Wrapper function to skip Eglot in cython-mode (and any other modes you want to exclude)
+      (defun my/eglot-maybe-ensure ()
+        (unless (derived-mode-p 'cython-mode)
+          (eglot-ensure)))
+      :hook (((c-mode c++-mode python-mode python-ts-mode lua-mode LaTeX-mode)
+              . my/eglot-maybe-ensure)
+             (eglot-managed-mode . (lambda () (add-hook 'before-save-hook #'eglot-format-buffer nil t))))
       :custom
       ;; Good default
       (eglot-autoshutdown t) ; Shutdown unused servers.
       (eglot-code-action-indications nil) ; Can be annoying.
       (eglot-report-progress nil) ; Disable LSP server logs (Don't show lsp messages at the bottom, java)
       (flymake-show-diagnostics-at-end-of-line 'short) ; IDE like errors in the editor. There is also fancy.
-      (eglot-workspace-configuration '(:python (:pythonPath "/var/tmp/sage-10.9-current/local/bin/python3")
-                                               :basedpyright
-                                               (:analysis
-                                                (:diagnosticMode "openFilesOnly"
-                                                                 :extraPaths ["/Users/gjazeron/Library/SageMath-10-9/lib/python3.14/site-packages"]
-                                                                 :typeCheckingMode "basic"
-                                                                 :useLibraryCodeForTypes :json-false))
-                                               ))
+      :config
+      (setq-default eglot-workspace-configuration '(:python (:pythonPath "/var/tmp/sage-10.9-current/local/bin/python3")
+                                                            :basedpyright
+                                                            (:analysis
+                                                             (:diagnosticMode "openFilesOnly"
+                                                                              :extraPaths ["/Users/gjazeron/Library/SageMath-10-9/lib/python3.14/site-packages"]
+                                                                              :typeCheckingMode "basic"
+                                                                              :useLibraryCodeForTypes :json-false))
+                                                            :ruff (:lint (:enable :json-false))))
+      (setq eglot-watch-files-outside-project-root nil)
       ;; Manual lsp servers
       ;;:config
       ;;(add-to-list 'eglot-server-programs
       ;;             `(lua-mode . ("PATH_TO_THE_LSP_FOLDER/bin/lua-language-server" "-lsp"))) ; Adds our lua lsp server to eglot's server list
+      ;; Use rass to combine basepyright with ruff
+      (add-to-list 'eglot-server-programs
+                   '((python-mode python-ts-mode)
+                     . ("rass" "--" "basedpyright-langserver" "--stdio" "--" "ruff" "server")))
       )
 #+end_src
 
-#+RESULTS:
-| eglot-ensure |
-
+** Formatting
+Use reformatter for formating.
+For python, use ruff as a formatter
+WARNING : not used anymore because it seemed to cause some bugs
+Instead, formatting is done in eglot
+#+begin_src emacs-lisp :tangle no
+    (use-package reformatter
+      :hook ((python-mode . ruff-format-on-save-mode)
+             (python-ts-mode . ruff-format-on-save-mode))
+      :config
+      (reformatter-define ruff-format
+                          :program "ruff"
+                          :args `("format" "--stdin-filename" ,buffer-file-name "-")))
+#+end_src
 ** Mason.el
-Package manager for LSP, DAP, linters, and more for the Emacs Operating System.
-I waited so long for a package like this.
-If you plan to use something like LSP-mode don't forget to remove this.
 #+begin_src emacs-lisp
     (use-package mason
       :hook (after-init . mason-ensure))
@@ -706,10 +708,6 @@ Developed by me.
 
 ** Tree-Sitter
 For more info about how to use Tree-Sitter check out this [[https://www.masteringemacs.org/article/how-to-get-started-tree-sitter][masteringemacs]] article.
-
-After Emacs 31, you only need to manage the sources for external packages, because the built-in packages now manage their own sources.
-
-*To use it, remove :tangle no from the beginning of the source code block.*
 #+begin_src emacs-lisp
     (use-package emacs
       :custom
@@ -770,12 +768,12 @@ You can easily write your own font locking with treesitter
 #+end_src
 
 ** Language modes
-*** Python setup
+*** Cython setup
 #+begin_src emacs-lisp
-    (use-package pyvenv
-      :hook (python-base-mode . pyvenv-mode)
-      )
-      #+end_src
+    (use-package cython-mode
+      :mode ("\\.pyx\\'"
+             "\\.pxd\\'"))
+#+end_src
 *** LaTeX mode
 Setup auctex + viewing pdf in skim
 #+begin_src emacs-lisp
@@ -799,7 +797,7 @@ Setup auctex + viewing pdf in skim
             '(("Skim" "/Applications/Skim.app/Contents/SharedSupport/displayline -b -g %n %o %b")))
       ;; switch focus to emacs when doing reverse search. See
       ;; https://sourceforge.net/p/skim-app/wiki/TeX_and_PDF_Synchronization/#h-activating-backward-search-from-skim
-      (setq TeX-command-default "LaTeXMK") ;; use latexmk as default
+      (setq TeX-command-default "LaTeXMk") ;; use latexmk as default
       (defun tex/raise-emacs ()
         "Bring Emacs to the foreground, e.g. after a Skim inverse-search jump."
         (start-process "raise-emacs" nil "osascript" "-e"
@@ -865,7 +863,7 @@ Prettify headings and plain lists in Org mode. Modern version of org-bullets.
     (use-package ghostel-eshell
       :ensure nil ;; do not ensure because it is part of ghostel
       :after ghostel
-      :hook (eshell-load . ghostel-eshell-visual-command-mode))
+      :hook (eshell-load . ghostel-eshell-visual-command-mode)) ;; use ghostel for displaying visual stuff in eshel
 #+end_src
 *** Exec-path-from-shell
 Make Emacs use the $PATH set up by the user's shell
@@ -925,9 +923,7 @@ Highlights uncommitted changes on the left side of the window (area also known a
 
 * Completion
 ** Corfu
-Enhances in-buffer completion with a small completion popup.
-Corfu is a small package, which relies on the Emacs completion facilities and concentrates on providing a polished completion.
-For more configuration options check out their [[https://github.com/minad/corfu][git repository]].
+More config in [[https://github.com/minad/corfu][git repository]].
 Notes:
 - To enter Orderless field separator, use M-SPC.
 #+begin_src emacs-lisp
@@ -943,8 +939,7 @@ Notes:
       (corfu-separator ?\s)          ; Orderless field separator, Use M-SPC to enter separator
       ;; (corfu-quit-at-boundary nil)   ; Never quit at completion boundary
       ;; (corfu-quit-no-match nil)      ; Never quit, even if there is no match
-      ;; (corfu-preview-current nil)    ; Disable current candidate preview
-      ;; (corfu-preselect 'prompt)      ; Preselect the prompt
+      (corfu-preselect 'prompt)      ; Preselect the prompt
       ;; (corfu-on-exact-match nil)     ; Configure handling of exact matches
       ;; (corfu-scroll-margin 5)        ; Use scroll margin
 
@@ -953,7 +948,6 @@ Notes:
       ;; Try `cape-dict' as an alternative.
       (text-mode-ispell-word-completion nil)
 
-      ;; Enable indentation+completion using the TAB key.
       ;; `completion-at-point' is often bound to M-TAB.
       (tab-always-indent 'complete)
 
@@ -968,6 +962,8 @@ Notes:
       :after corfu
       :init (add-to-list 'corfu-margin-formatters #'nerd-icons-corfu-formatter))
 #+end_src
+
+#+RESULTS:
 
 ** Cape
 Provides Completion At Point Extensions which can be used in combination with Corfu, Company or the default completion UI.
@@ -993,8 +989,8 @@ Read the [[https://github.com/minad/cape#configuration][configuration section]] 
                              ;;#'snippy-capf       ; Vscode Snippets
                              #'yasnippet-capf    ; Yasnippet snippets
                              ;; #'cape-abbrev       ; Complete abbreviation
-                             #'cape-dabbrev      ; Complete word from current buffers
                              #'cape-keyword      ; Keyword completion
+                             #'cape-dabbrev      ; Complete word from current buffers
                              ;; #'cape-line         ; Complete entire line from current buffer
                              ;; #'cape-history      ; Complete from Eshell, Comint or minibuffer history
                              ;; #'cape-dict         ; Dictionary completion (Needs Dictionary file installed)
@@ -1018,7 +1014,7 @@ Read the [[https://github.com/minad/cape#configuration][configuration section]] 
 
         ;; Add Eglot to the front of the list if it's active
         (when (bound-and-true-p eglot--managed-mode)
-          (setq merge-backends (append merge-backends (list #'eglot-completion-at-point))))
+          (setq merge-backends (cons #'eglot-completion-at-point merge-backends)))
 
         ;; Create the super-capf and set it buffer-locally
         (setq-local completion-at-point-functions
@@ -1086,7 +1082,7 @@ Recommended for packages like vertico, corfu.
 
 ** Embark
 Emacs Mini-Buffer Actions Rooted in Keymaps. Right click like menu for Emacs.
-#+begin_src emacs-lisp
+#+begin_src emacs-lisp :tangle no
     (use-package embark :defer t)
     (use-package embark-consult
       :hook
@@ -1177,6 +1173,9 @@ An alternative to the built-in Emacs help that provides much more contextual inf
       ("C-h x" . helpful-command))
 #+end_src
 
+#+RESULTS:
+: helpful-command
+
 ** Diminish
 This package implements hiding or abbreviation of the modeline displays (lighters) of minor-modes.
 With this package installed, you can add ‘:diminish’ to any use-package block to hide that particular mode in the modeline.
@@ -1190,6 +1189,9 @@ Adds colors to brackets.
     (use-package rainbow-delimiters
       :hook (prog-mode . rainbow-delimiters-mode))
 #+end_src
+
+#+RESULTS:
+| rainbow-delimiters-mode | yas-minor-mode | whitespace-mode | hs-minor-mode |
 
 ** Hl-todo
 Highlight TODO keywords.

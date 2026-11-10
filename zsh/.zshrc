@@ -114,6 +114,7 @@ alias rm='trash'
 # Compilation flags
 # export ARCHFLAGS="-arch $(uname -m)"
 export CPATH="/opt/homebrew/include${CPATH:+:$CPATH}"
+export LIBRARY_PATH="/opt/homebrew/lib${LIBRARY_PATH:+:$LIBRARY_PATH}"
 
 # OMP
 export CPPFLAGS="-I/opt/homebrew/opt/libomp/include"
